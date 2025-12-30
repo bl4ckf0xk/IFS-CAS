@@ -32,16 +32,24 @@ class IFSCustomizationStudio:
         load_dotenv()
         
         self.db_path = db_path
-        self.vector_db = VectorDatabase(persist_directory=db_path)
+        self.vector_db = None
         self.agent = None
+        
+        # Initialize vector database with error handling
+        try:
+            self.vector_db = VectorDatabase(persist_directory=db_path)
+        except ImportError as e:
+            logger.warning(f"Vector database not initialized: {e}")
+            logger.warning("Install dependencies with: pip install chromadb sentence-transformers")
+            return
         
         # Initialize agent if OpenAI key is available
         try:
             self.agent = IFSAgenticRAG(self.vector_db)
             logger.info("IFS Customization Agent Studio initialized successfully")
-        except ValueError as e:
+        except (ValueError, ImportError) as e:
             logger.warning(f"Agent not initialized: {e}")
-            logger.warning("You can still scrape documentation, but queries require OPENAI_API_KEY")
+            logger.warning("You can still scrape documentation, but queries require dependencies and OPENAI_API_KEY")
     
     def scrape_docs(self, start_url: str = None, max_pages: int = 50) -> None:
         """
@@ -51,6 +59,10 @@ class IFSCustomizationStudio:
             start_url: Starting URL for scraping
             max_pages: Maximum number of pages to scrape
         """
+        if not self.vector_db:
+            logger.error("Vector database not initialized. Install required dependencies.")
+            return
+        
         logger.info("Starting documentation scraping...")
         
         scraper = IFSDocsScraper()

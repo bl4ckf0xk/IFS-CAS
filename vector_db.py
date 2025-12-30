@@ -36,11 +36,8 @@ class VectorDatabase:
         
         self.persist_directory = persist_directory
         
-        # Initialize ChromaDB client
-        self.client = chromadb.Client(Settings(
-            persist_directory=persist_directory,
-            anonymized_telemetry=False
-        ))
+        # Initialize ChromaDB client with persistent storage
+        self.client = chromadb.PersistentClient(path=persist_directory)
         
         # Create or get collection
         self.collection = self.client.get_or_create_collection(

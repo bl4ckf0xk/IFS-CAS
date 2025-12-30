@@ -6,8 +6,9 @@ Demonstrates the system architecture and usage without requiring all dependencie
 import sys
 import os
 
-# Add project root to path
-sys.path.insert(0, '/home/runner/work/IFS-CAS/IFS-CAS')
+# Add project root to path (relative to script location)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, script_dir)
 
 def demo_scraper():
     """Demonstrate the scraper module"""

@@ -65,10 +65,11 @@ def test_vector_db():
     print("\nTesting vector database...")
     
     try:
+        import tempfile
         from vector_db import VectorDatabase
         
-        # Use a test database path
-        test_db_path = "/tmp/test_chroma_db"
+        # Use a temporary database path (cross-platform)
+        test_db_path = os.path.join(tempfile.gettempdir(), 'test_chroma_db')
         db = VectorDatabase(persist_directory=test_db_path)
         print(f"✓ Vector database initialized at {test_db_path}")
         

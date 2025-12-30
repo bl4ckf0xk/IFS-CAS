@@ -8,8 +8,6 @@ from typing import List, Dict, Optional
 import logging
 
 try:
-    from langchain.prompts import PromptTemplate
-    from langchain.chains import LLMChain
     from langchain_openai import ChatOpenAI
     from langchain.schema import SystemMessage, HumanMessage, AIMessage
     LANGCHAIN_AVAILABLE = True
