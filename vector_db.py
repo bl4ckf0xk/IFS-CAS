@@ -3,11 +3,16 @@ Vector database management for storing and retrieving documentation
 Uses ChromaDB for vector storage and similarity search
 """
 
-import chromadb
-from chromadb.config import Settings
+try:
+    import chromadb
+    from chromadb.config import Settings
+    CHROMADB_AVAILABLE = True
+except ImportError:
+    CHROMADB_AVAILABLE = False
+    print("Warning: chromadb not installed. Install with: pip install chromadb")
+
 from typing import List, Dict, Optional
 import logging
-from sentence_transformers import SentenceTransformer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +28,12 @@ class VectorDatabase:
         Args:
             persist_directory: Directory to persist the database
         """
+        if not CHROMADB_AVAILABLE:
+            raise ImportError(
+                "chromadb is required but not installed. "
+                "Install it with: pip install chromadb sentence-transformers"
+            )
+        
         self.persist_directory = persist_directory
         
         # Initialize ChromaDB client

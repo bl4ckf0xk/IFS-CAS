@@ -5,11 +5,17 @@ Uses LangChain to create an intelligent agent that can answer questions with cod
 
 import os
 from typing import List, Dict, Optional
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from langchain_openai import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage, AIMessage
 import logging
+
+try:
+    from langchain.prompts import PromptTemplate
+    from langchain.chains import LLMChain
+    from langchain_openai import ChatOpenAI
+    from langchain.schema import SystemMessage, HumanMessage, AIMessage
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    LANGCHAIN_AVAILABLE = False
+    print("Warning: langchain not installed. Install with: pip install langchain langchain-openai")
 
 from vector_db import VectorDatabase
 
@@ -28,6 +34,12 @@ class IFSAgenticRAG:
             vector_db: VectorDatabase instance
             openai_api_key: OpenAI API key (or set OPENAI_API_KEY env var)
         """
+        if not LANGCHAIN_AVAILABLE:
+            raise ImportError(
+                "langchain is required but not installed. "
+                "Install it with: pip install langchain langchain-openai"
+            )
+        
         self.vector_db = vector_db
         
         # Initialize LLM
