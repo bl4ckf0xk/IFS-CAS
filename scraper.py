@@ -106,9 +106,19 @@ class IFSDocsScraper:
                 else:
                     full_url = start_url.rsplit('/', 1)[0] + '/' + href
                 
-                # Only include docs.ifs.com links
-                if 'docs.ifs.com' in full_url or full_url.startswith(self.base_url):
-                    links.add(full_url)
+                # Only include docs.ifs.com links - check domain properly
+                from urllib.parse import urlparse
+                try:
+                    parsed = urlparse(full_url)
+                    # Validate that the hostname is docs.ifs.com or matches base_url
+                    if (parsed.hostname and 
+                        (parsed.hostname == 'docs.ifs.com' or 
+                         parsed.hostname.endswith('.docs.ifs.com') or
+                         full_url.startswith(self.base_url))):
+                        links.add(full_url)
+                except ValueError:
+                    # Skip invalid URLs
+                    continue
                 
                 if len(links) >= max_pages:
                     break
