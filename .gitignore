@@ -45,3 +45,5 @@ chroma_db/
 # Logs
 *.log
 logs/
+
+Ref_Core/*
