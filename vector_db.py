@@ -7,9 +7,10 @@ try:
     import chromadb
     from chromadb.config import Settings
     CHROMADB_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     CHROMADB_AVAILABLE = False
-    print("Warning: chromadb not installed. Install with: pip install chromadb")
+    print(f"Warning: chromadb not installed. Error: {e}")
+    print("Install with: pip install chromadb")
 
 from typing import List, Dict, Optional
 import logging
@@ -31,7 +32,7 @@ class VectorDatabase:
         if not CHROMADB_AVAILABLE:
             raise ImportError(
                 "chromadb is required but not installed. "
-                "Install it with: pip install chromadb sentence-transformers"
+                "Install it with: pip install chromadb"
             )
         
         self.persist_directory = persist_directory
@@ -39,10 +40,30 @@ class VectorDatabase:
         # Initialize ChromaDB client with persistent storage
         self.client = chromadb.PersistentClient(path=persist_directory)
         
+        # Determine embedding function
+        embedding_function = None
+        try:
+            from chromadb.utils import embedding_functions
+            import os
+            
+            openai_key = os.getenv('OPENAI_API_KEY')
+            if openai_key:
+                embedding_function = embedding_functions.OpenAIEmbeddingFunction(
+                    api_key=openai_key,
+                    model_name="text-embedding-3-small"
+                )
+                logger.info("Using OpenAI embeddings")
+            else:
+                logger.warning("OPENAI_API_KEY not found, trying default sentence-transformers")
+        except Exception as e:
+            logger.warning(f"Could not initialize OpenAI embeddings: {e}")
+        
         # Create or get collection
+        # If embedding_function is None, Chroma uses default (sentence-transformers)
         self.collection = self.client.get_or_create_collection(
             name="ifs_documentation",
-            metadata={"description": "IFS documentation and code examples"}
+            metadata={"description": "IFS documentation and code examples"},
+            embedding_function=embedding_function
         )
         
         logger.info(f"Vector database initialized at {persist_directory}")
@@ -97,32 +118,52 @@ class VectorDatabase:
         all_metadatas = []
         all_ids = []
         
-        doc_id = 0
+        # Determine starting ID based on existing count to avoid overwrite if extending
+        start_id = self.collection.count()
+        doc_id = start_id
+        
         for doc in documents:
-            # Chunk the main content
-            content_chunks = self.chunk_text(doc.get('content', ''))
+            doc_type = doc.get('type', 'content')
             
-            for i, chunk in enumerate(content_chunks):
-                all_chunks.append(chunk)
-                all_metadatas.append({
-                    'title': doc.get('title', 'Untitled'),
-                    'url': doc.get('url', ''),
-                    'type': 'content',
-                    'chunk_index': i
-                })
-                all_ids.append(f"doc_{doc_id}_chunk_{i}")
-            
-            # Add code examples as separate entries
-            for j, code in enumerate(doc.get('code_examples', [])):
-                if code and len(code) > 20:  # Filter very short code snippets
-                    all_chunks.append(f"Code example:\n{code}")
+            if doc_type == 'core_code':
+                # For core code, we might want to keep the whole file or larger chunks
+                # For now, let's use the same chunking but with different metadata
+                content_chunks = self.chunk_text(doc.get('content', ''), chunk_size=2000, overlap=200)
+                
+                for i, chunk in enumerate(content_chunks):
+                    all_chunks.append(chunk)
                     all_metadatas.append({
                         'title': doc.get('title', 'Untitled'),
                         'url': doc.get('url', ''),
-                        'type': 'code',
-                        'example_index': j
+                        'type': 'core_code',
+                        'chunk_index': i
                     })
-                    all_ids.append(f"doc_{doc_id}_code_{j}")
+                    all_ids.append(f"core_{doc_id}_chunk_{i}")
+            else:
+                # Regular documentation content
+                content_chunks = self.chunk_text(doc.get('content', ''))
+                
+                for i, chunk in enumerate(content_chunks):
+                    all_chunks.append(chunk)
+                    all_metadatas.append({
+                        'title': doc.get('title', 'Untitled'),
+                        'url': doc.get('url', ''),
+                        'type': 'content',
+                        'chunk_index': i
+                    })
+                    all_ids.append(f"doc_{doc_id}_chunk_{i}")
+                
+                # Add code examples as separate entries
+                for j, code in enumerate(doc.get('code_examples', [])):
+                    if code and len(code) > 20:  # Filter very short code snippets
+                        all_chunks.append(f"Code example:\n{code}")
+                        all_metadatas.append({
+                            'title': doc.get('title', 'Untitled'),
+                            'url': doc.get('url', ''),
+                            'type': 'code',
+                            'example_index': j
+                        })
+                        all_ids.append(f"doc_{doc_id}_code_{j}")
             
             doc_id += 1
         

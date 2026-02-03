@@ -47,3 +47,5 @@ chroma_db/
 logs/
 
 Ref_Core/*
+docs/*
+scraped_docs/*

@@ -8,12 +8,24 @@ from typing import List, Dict, Optional
 import logging
 
 try:
-    from langchain_openai import ChatOpenAI
-    from langchain.schema import SystemMessage, HumanMessage, AIMessage
+    from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
-    print("Warning: langchain not installed. Install with: pip install langchain langchain-openai")
+
+# Optional imports based on availability
+try:
+    from langchain_openai import ChatOpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+try:
+    from langchain_groq import ChatGroq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+
 
 from vector_db import VectorDatabase
 
@@ -24,36 +36,62 @@ logger = logging.getLogger(__name__)
 class IFSAgenticRAG:
     """Agentic RAG system for IFS documentation queries"""
     
-    def __init__(self, vector_db: VectorDatabase, openai_api_key: Optional[str] = None):
+    def __init__(self, vector_db: VectorDatabase, openai_api_key: Optional[str] = None, 
+                 provider: str = 'openai', model: str = None):
         """
         Initialize the agentic RAG system
         
         Args:
             vector_db: VectorDatabase instance
             openai_api_key: OpenAI API key (or set OPENAI_API_KEY env var)
+            provider: LLM provider ('openai' or 'groq')
+            model: Specific model name to use
         """
         if not LANGCHAIN_AVAILABLE:
             raise ImportError(
                 "langchain is required but not installed. "
-                "Install it with: pip install langchain langchain-openai"
+                "Install it with: pip install langchain"
             )
         
         self.vector_db = vector_db
+        self.provider = provider.lower()
         
-        # Initialize LLM
-        api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable.")
-        
-        self.llm = ChatOpenAI(
-            model="gpt-3.5-turbo",
-            temperature=0.7,
-            api_key=api_key
-        )
+        # Initialize LLM based on provider
+        if self.provider == 'groq':
+            if not GROQ_AVAILABLE:
+                raise ImportError("langchain-groq is required for Groq provider. Install with: pip install langchain-groq")
+            
+            groq_api_key = os.getenv('GROQ_API_KEY')
+            if not groq_api_key:
+                raise ValueError("GROQ_API_KEY is required for Groq provider. Set GROQ_API_KEY environment variable.")
+            
+            model_name = model or "llama3-70b-8192"
+            logger.info(f"Initializing Groq LLM with model: {model_name}")
+            self.llm = ChatGroq(
+                groq_api_key=groq_api_key,
+                model_name=model_name,
+                temperature=0.7
+            )
+        else:
+            # Default to OpenAI
+            if not OPENAI_AVAILABLE:
+                raise ImportError("langchain-openai is required for OpenAI provider. Install with: pip install langchain-openai")
+
+            api_key = openai_api_key or os.getenv('OPENAI_API_KEY')
+            if not api_key:
+                raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable.")
+            
+            model_name = model or "gpt-3.5-turbo"
+            logger.info(f"Initializing OpenAI LLM with model: {model_name}")
+            self.llm = ChatOpenAI(
+                model=model_name,
+                temperature=0.7,
+                api_key=api_key
+            )
         
         # System prompt for the agent
         self.system_prompt = """You are an expert IFS (Industrial and Financial Systems) assistant. 
-You help developers by providing accurate code examples and explanations based on IFS documentation.
+You help developers by providing accurate code examples and explanations based on IFS documentation and CORE SOURCE CODE.
 
 Your responsibilities:
 1. Answer questions about IFS systems and customizations
@@ -67,6 +105,7 @@ When providing code:
 - Add comments to explain the code
 - Follow IFS best practices and conventions
 - Specify the language/framework being used
+- When referencing Core Source Code, explain that this is from the actual IFS codebase
 """
         
         self.conversation_history = []
@@ -89,9 +128,13 @@ When providing code:
         # Retrieve code examples
         code_results = self.vector_db.search(query, n_results=3, filter_type='code')
         
+        # Retrieve core code
+        core_code_results = self.vector_db.search(query, n_results=3, filter_type='core_code')
+        
         return {
             'content': content_results,
-            'code': code_results
+            'code': code_results,
+            'core_code': core_code_results
         }
     
     def format_context(self, context: Dict[str, List[Dict]]) -> str:
@@ -123,6 +166,14 @@ When providing code:
             for i, item in enumerate(context['code'], 1):
                 title = item['metadata'].get('title', 'Unknown')
                 formatted.append(f"{i}. From: {title}")
+                formatted.append(f"   {item['content']}\n")
+                
+        # Add core code
+        if context.get('core_code'):
+            formatted.append("\n=== Relevant Core Source Code (Ref_Core) ===\n")
+            for i, item in enumerate(context['core_code'], 1):
+                title = item['metadata'].get('title', 'Unknown')
+                formatted.append(f"{i}. File: {title}")
                 formatted.append(f"   {item['content']}\n")
         
         return "\n".join(formatted)

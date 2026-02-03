@@ -4,28 +4,30 @@ An intelligent agentic RAG (Retrieval-Augmented Generation) system that scrapes 
 
 ## Features
 
-🤖 **Agentic RAG System**: Uses advanced AI to understand queries and generate relevant code examples  
-🌐 **Documentation Scraper**: Automatically scrapes and indexes IFS documentation  
-💾 **Vector Database**: Efficient semantic search using ChromaDB  
-💬 **Interactive CLI**: User-friendly command-line interface  
-🔍 **Smart Retrieval**: Finds the most relevant documentation and code examples  
-📝 **Code Generation**: Provides working code examples with explanations
+- 🤖 **Agentic RAG System**: Uses advanced AI to understand queries and generate relevant code examples
+- 🚀 **Multi-Provider Support**: Supports OpenAI (GPT-4/3.5) and **Groq** (Llama 3, Mixtral) for ultra-fast responses
+- 🌐 **Optimized Scraper**: persistent browser session for fast, robust documentation scraping
+- 💾 **Vector Database**: Efficient semantic search using ChromaDB (with OpenAI embeddings fallback)
+- 📂 **Core Code Ingestion**: Ingests local IFS source code (`.plsql`, `.svc`, etc.) for deep codebase understanding
+- 💬 **Interactive CLI**: User-friendly command-line interface
+- 🔍 **Smart Retrieval**: Finds the most relevant documentation and actual source code examples
 
 ## Architecture
 
 The system consists of four main components:
 
-1. **Web Scraper** (`scraper.py`): Scrapes documentation from docs.ifs.com
-2. **Vector Database** (`vector_db.py`): Stores and retrieves documentation using semantic search
-3. **RAG Agent** (`rag_agent.py`): Intelligent agent that generates answers with code examples
-4. **Main Application** (`main.py`): CLI interface for user interaction
+1. **Web Scraper** (`scraper.py`): Uses a persistent Playwright session to efficiently scrape documentation.
+2. **Vector Database** (`vector_db.py`): Stores embeddings of documentation and source code. Supports OpenAI embeddings if local models fail.
+3. **RAG Agent** (`rag_agent.py`): Intelligent agent that generates answers using OpenAI or Groq LLMs.
+4. **Main Application** (`main.py`): CLI interface for scraping, ingestion, and querying.
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.8 or higher
-- OpenAI API key (for the RAG agent)
+- OpenAI API key (for embeddings/agent)
+- (Optional) Groq API key (for fast inference)
 
 ### Setup
 
@@ -49,7 +51,11 @@ pip install -r requirements.txt
 4. Configure environment variables:
 ```bash
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+```
+Edit `.env` and add your keys:
+```env
+OPENAI_API_KEY=your_openai_key
+GROQ_API_KEY=your_groq_key_if_using_groq
 ```
 
 ## Usage
@@ -62,111 +68,70 @@ First, scrape and index the IFS documentation:
 python main.py --scrape --max-pages 50
 ```
 
-Options:
-- `--url`: Custom starting URL (default: https://docs.ifs.com)
-- `--max-pages`: Maximum number of pages to scrape (default: 50)
+### 2. Ingest Core Source Code
 
-### 2. Interactive Mode
+Ingest your local IFS source code (e.g., from a Build Home or Workspace) to let the agent answer questions about your specific implementation:
 
-Launch the interactive CLI to ask questions:
+```bash
+python main.py --ingest-core --core-path "C:/MyWorkspace/Ref_Core"
+```
+
+### 3. Interactive Mode
+
+Launch the interactive CLI. By default it uses OpenAI:
 
 ```bash
 python main.py
 ```
 
-Example interaction:
-```
-You: How do I create a custom field in IFS?
-
-Agent: To create a custom field in IFS, you can use the following approach...
-[Provides detailed explanation with code examples]
-```
-
-Available commands in interactive mode:
-- Type your question to get an answer
-- `clear` - Clear conversation history
-- `stats` - Show database statistics
-- `quit` or `exit` - Exit the application
-
-### 3. Single Query Mode
-
-Execute a single query without entering interactive mode:
+To use **Groq** for faster inference:
 
 ```bash
-python main.py --query "How do I customize an IFS form?"
+python main.py --provider groq --model llama-3.3-70b-versatile
 ```
 
-## Example Queries
+### 4. Single Query Mode
 
-Here are some example queries you can try:
+Execute a single query directly:
 
-- "How do I create a custom projection in IFS Cloud?"
-- "Show me code to add a custom field to a page"
-- "How do I implement a custom event action in IFS?"
-- "What's the best way to extend IFS functionality?"
-- "Show me an example of IFS API integration"
+```bash
+python main.py --query "How does AccPeriodCloseUtil work?" --provider groq
+```
+
+## CLI Options
+
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `--scrape` | Run documentation scraper | False |
+| `--ingest-core` | Run core code ingestion | False |
+| `--core-path` | Path to core code directory | `./Ref_Core` |
+| `--url` | Start URL for scraping | `https://docs.ifs.com` |
+| `--max-pages` | Max pages to scrape | 50 |
+| `--query` | Run a single query | None |
+| `--provider` | LLM Provider (`openai` or `groq`) | `openai` |
+| `--model` | Specific model to use | `gpt-3.5-turbo` or `llama-3.3-70b-versatile` |
 
 ## Project Structure
 
 ```
 IFS-CAS/
-├── main.py              # Main application entry point
-├── scraper.py           # Web scraper for IFS documentation
-├── vector_db.py         # Vector database management
-├── rag_agent.py         # Agentic RAG implementation
-├── requirements.txt     # Python dependencies
-├── .env.example         # Environment variables template
-├── .gitignore          # Git ignore rules
-└── README.md           # This file
+├── main.py              # Entry point & CLI
+├── scraper.py           # Persistent browser scraper
+├── vector_db.py         # ChromaDB wrapper (OpenAI embedding support)
+├── rag_agent.py         # RAG logic & LLM integration (OpenAI/Groq)
+├── requirements.txt     # Dependencies
+├── .env.example         # Template for env vars
+└── README.md            # Documentation
 ```
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file with the following variables:
-
-```env
-# Required: OpenAI API key for the RAG agent
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Optional: Customize the scraping target
-IFS_DOCS_URL=https://docs.ifs.com
-
-# Optional: Vector database path
-CHROMA_DB_PATH=./chroma_db
-```
-
-## How It Works
-
-1. **Scraping**: The scraper crawls docs.ifs.com, extracting documentation text and code examples
-2. **Indexing**: Documents are chunked and stored in a vector database with embeddings
-3. **Query Processing**: User queries are converted to vector embeddings
-4. **Retrieval**: Relevant documentation chunks are retrieved using similarity search
-5. **Generation**: The LLM generates a response with code examples based on retrieved context
-
-## Technologies Used
-
-- **LangChain**: Framework for building LLM applications
-- **OpenAI GPT**: Large language model for generating responses
-- **ChromaDB**: Vector database for semantic search
-- **BeautifulSoup**: Web scraping and parsing
-- **Sentence Transformers**: Text embeddings for semantic search
 
 ## Troubleshooting
 
 ### "Agent not initialized" error
-- Make sure you have set `OPENAI_API_KEY` in your `.env` file
-- Verify the API key is valid
+- Ensure `OPENAI_API_KEY` is set.
+- If using Groq, ensure `GROQ_API_KEY` is set.
 
-### Scraping errors
-- Check your internet connection
-- The docs.ifs.com website structure may have changed
-- Try reducing `--max-pages` if you encounter rate limiting
-
-### Database issues
-- Delete the `chroma_db` directory and re-scrape if you encounter database errors
-- Make sure you have write permissions in the project directory
+### Database dependencies (Windows)
+- If you see errors about `torch` or `sentence-transformers` on Windows, the system automatically falls back to **OpenAI Embeddings**. Ensure your `OPENAI_API_KEY` is valid.
 
 ## Contributing
 
@@ -174,8 +139,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is open source and available under the MIT License.
-
-## Disclaimer
-
-This tool is for educational and development purposes. Always respect the terms of service of the websites you scrape and use API keys responsibly.
+MIT License
